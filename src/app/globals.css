@@ -1,0 +1,107 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #121212;
+  color: #f2f2f2;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+  display: grid;
+  gap: 1rem;
+}
+
+button {
+  width: fit-content;
+  border: 1px solid #6f74ff;
+  background: #2c33ff;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.season-box {
+  border: 1px solid #555;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.season-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.season-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.silhouette-card {
+  width: fit-content;
+  border: 1px solid #3f3f3f;
+  border-radius: 12px;
+  padding: 1rem;
+  background: #1c1c1c;
+}
+
+.pokemon-image {
+  height: auto;
+}
+
+.pokemon-image.silhouette {
+  filter: brightness(0);
+}
+
+.pokemon-image.revealed {
+  filter: none;
+}
+
+.guess-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.guess-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.guess-form input {
+  border-radius: 8px;
+  border: 1px solid #555;
+  background: #1f1f1f;
+  color: #f2f2f2;
+  padding: 0.65rem 0.75rem;
+  min-width: 220px;
+}
+
+.result-panel {
+  display: grid;
+  gap: 0.4rem;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  padding: 0.8rem;
+}
+
+.hint-mask {
+  font-family: "Courier New", Courier, monospace;
+  white-space: pre-wrap;
+}
