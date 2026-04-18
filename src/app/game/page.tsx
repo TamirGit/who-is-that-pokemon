@@ -187,7 +187,8 @@ function GamePageContent() {
                 <button onClick={onHint} disabled={hintLevel >= MAX_HINT_LEVEL}>
                   {hintLevel >= MAX_HINT_LEVEL
                     ? "All hints used"
-                    : `Hint (${getHintLabel((hintLevel + 1) as 1 | 2 | 3)})`}
+                    : `Hint (${getHintLabel((hintLevel + 1) as 1 | 2 | 3)})`
+                  }
                 </button>
                 <button onClick={onSkip}>Skip</button>
               </div>

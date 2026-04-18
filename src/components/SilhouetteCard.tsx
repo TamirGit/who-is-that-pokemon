@@ -14,6 +14,7 @@ export function SilhouetteCard({ imageUrl, name, revealed }: Props) {
         alt={revealed ? name : "Pokemon silhouette"}
         width={280}
         height={280}
+        loading="eager"
         className={revealed ? "pokemon-image revealed" : "pokemon-image silhouette"}
       />
     </div>

@@ -1,0 +1,61 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Next.js: Launch Local Dev (Debug)",
+      "type": "node",
+      "request": "launch",
+      "preLaunchTask": "bootstrap-data",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--inspect=9229", "--enable-source-maps"],
+      "program": "${workspaceFolder}/node_modules/next/dist/bin/next",
+      "args": ["dev", "-H", "0.0.0.0", "-p", "3000"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "autoAttachChildProcesses": true,
+      "skipFiles": ["<node_internals>/**"],
+      "sourceMaps": true
+    },
+    {
+      "name": "Next.js: Attach Local Node (9229)",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "address": "localhost",
+      "restart": true,
+      "autoAttachChildProcesses": true,
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Next.js: Attach Docker Node (9229)",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "address": "localhost",
+      "restart": true,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app",
+      "autoAttachChildProcesses": true,
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Next.js: Browser",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Next.js: Fullstack Local",
+      "configurations": ["Next.js: Launch Local Dev (Debug)", "Next.js: Browser"]
+    },
+    {
+      "name": "Next.js: Fullstack Docker",
+      "configurations": ["Next.js: Attach Docker Node (9229)", "Next.js: Browser"]
+    }
+  ]
+}
