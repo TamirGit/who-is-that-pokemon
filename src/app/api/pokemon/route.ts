@@ -43,11 +43,17 @@ async function getFromGenerationCaches(
   const keys = generations.map((generation) => buildGenerationCacheKey(generation));
   const cachedRows = await redis.mGet(keys);
 
-  if (cachedRows.some((row) => row === null)) {
-    return null;
+  const entries: StoredPokemon[] = [];
+  for (const row of cachedRows) {
+    if (row === null) {
+      return null;
+    }
+    const parsed = deserializePokemon(row);
+    if (parsed === null) {
+      return null;
+    }
+    entries.push(...parsed);
   }
-
-  const entries = cachedRows.flatMap((row) => deserializePokemon(row) ?? []);
   return limitPokemon(entries, limit);
 }
 

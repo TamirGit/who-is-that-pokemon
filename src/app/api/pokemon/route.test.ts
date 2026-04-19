@@ -73,4 +73,24 @@ describe("GET /api/pokemon", () => {
     expect(mocks.getPokemonByGenerations).toHaveBeenCalledWith([1], 1025);
     expect(redis.setEx).toHaveBeenCalled();
   });
+
+  it("falls back to db when generation cache payload is malformed", async () => {
+    const redis = {
+      get: vi.fn().mockResolvedValue(null),
+      mGet: vi.fn().mockResolvedValue(["not-json"]),
+      setEx: vi.fn(),
+    };
+    mocks.getRedisClient.mockResolvedValue(redis);
+    mocks.getPokemonByGenerations.mockResolvedValue(SAMPLE);
+    mocks.getPokemonByGeneration.mockResolvedValue(SAMPLE);
+
+    const response = await GET({
+      nextUrl: new URL("http://localhost/api/pokemon?generations=1&limit=1025"),
+    } as never);
+    const payload = (await response.json()) as { source: string; pokemon: StoredPokemon[] };
+
+    expect(payload.source).toBe("db");
+    expect(payload.pokemon).toEqual(SAMPLE);
+    expect(mocks.getPokemonByGenerations).toHaveBeenCalledWith([1], 1025);
+  });
 });
