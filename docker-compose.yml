@@ -1,0 +1,140 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    env_file:
+      - .env.docker
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pokemon -d pokemon"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  bootstrap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["npm", "run", "bootstrap"]
+    env_file:
+      - .env.docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.docker
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+
+  app-debug:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.docker
+    command: ["npm", "run", "dev:debug"]
+    environment:
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+      - "9229:9229"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+    profiles: ["debug"]
+
+  integration-tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.docker
+    environment:
+      DATABASE_URL: postgres://pokemon:pokemon@postgres-test:5432/pokemon
+      REDIS_URL: redis://redis-test:6379
+    command: ["npm", "run", "test:integration"]
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+      bootstrap-test:
+        condition: service_completed_successfully
+    profiles: ["test"]
+
+  postgres-test:
+    image: postgres:16-alpine
+    env_file:
+      - .env.docker
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pokemon -d pokemon"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    profiles: ["test"]
+
+  redis-test:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    profiles: ["test"]
+
+  bootstrap-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["npm", "run", "bootstrap"]
+    env_file:
+      - .env.docker
+    environment:
+      DATABASE_URL: postgres://pokemon:pokemon@postgres-test:5432/pokemon
+      REDIS_URL: redis://redis-test:6379
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    restart: "no"
+    profiles: ["test"]
+
+volumes:
+  postgres_data:
+  redis_data:

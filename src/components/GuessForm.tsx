@@ -9,6 +9,7 @@ type Props = {
 
 export function GuessForm({ disabled, onSubmit }: Props) {
   const [guess, setGuess] = useState("");
+  const isSubmitDisabled = Boolean(disabled) || guess.trim().length === 0;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -28,7 +29,7 @@ export function GuessForm({ disabled, onSubmit }: Props) {
         aria-label="Guess pokemon name"
         disabled={disabled}
       />
-      <button type="submit" disabled={disabled}>
+      <button type="submit" disabled={isSubmitDisabled}>
         Guess
       </button>
     </form>

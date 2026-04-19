@@ -20,6 +20,16 @@ const GENERATION_ID_RANGES: Record<Generation, readonly [number, number]> = {
   9: [906, 1025],
 };
 
+export function getGenerationByPokemonId(id: number): Generation | null {
+  for (const generation of GENERATIONS) {
+    const [minId, maxId] = GENERATION_ID_RANGES[generation];
+    if (id >= minId && id <= maxId) {
+      return generation;
+    }
+  }
+  return null;
+}
+
 export function validateGenerationSelection(selected: Generation[]): Generation[] {
   const unique = new Set(selected);
   return GENERATIONS.filter((generation) => unique.has(generation));

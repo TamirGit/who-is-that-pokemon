@@ -1,41 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { filterPokemonByGenerations, GENERATIONS, type Generation } from "@/lib/generationRules";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-
-const POKE_API = "https://pokeapi.co/api/v2";
-const SPRITE_BASE =
-  "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork";
-const CACHE_TTL_MS = 5 * 60 * 1000;
-const LOCAL_DATA_PATH = path.join(process.cwd(), "data", "pokemon-cache.json");
+import { GENERATIONS, type Generation } from "@/lib/generationRules";
+import type { StoredPokemon } from "@/lib/storageTypes";
+import { getRedisClient } from "@/lib/server/redis";
+import {
+  FILTERED_POKEMON_CACHE_TTL_SECONDS,
+  GENERATION_POKEMON_CACHE_TTL_SECONDS,
+  buildFilteredCacheKey,
+  buildGenerationCacheKey,
+  deserializePokemon,
+  serializePokemon,
+} from "@/lib/server/pokemonCache";
+import { getPokemonByGeneration, getPokemonByGenerations } from "@/lib/server/pokemonRepository";
 
 export const runtime = "nodejs";
-
-type PokemonListResponse = {
-  results: Array<{ name: string; url: string }>;
-};
-
-type CachedPokemon = {
-  id: number;
-  name: string;
-  types: string[];
-  imageUrl: string;
-};
-
-type CacheValue = {
-  expiresAt: number;
-  pokemon: CachedPokemon[];
-};
-
-const responseCache = new Map<string, CacheValue>();
-
-function parseIdFromUrl(url: string): number | null {
-  const matches = url.match(/\/pokemon\/(\d+)\//);
-  if (!matches) {
-    return null;
-  }
-  return Number(matches[1]);
-}
 
 function parseGenerations(value: string | null): Generation[] {
   if (!value) {
@@ -50,75 +27,50 @@ function parseGenerations(value: string | null): Generation[] {
   return GENERATIONS.filter((generation) => requested.has(generation));
 }
 
-async function readLocalPokemonDataset(): Promise<CachedPokemon[] | null> {
-  try {
-    const raw = await readFile(LOCAL_DATA_PATH, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return null;
-    }
-    const normalized = parsed.filter((entry): entry is CachedPokemon => {
-      if (!entry || typeof entry !== "object") {
-        return false;
-      }
-      const candidate = entry as Partial<CachedPokemon>;
-      return (
-        typeof candidate.id === "number" &&
-        typeof candidate.name === "string" &&
-        Array.isArray(candidate.types) &&
-        typeof candidate.imageUrl === "string"
-      );
-    });
-    return normalized.length > 0 ? normalized : null;
-  } catch {
+function limitPokemon(pokemon: StoredPokemon[], limit: number): StoredPokemon[] {
+  return pokemon.filter((entry) => entry.id <= limit);
+}
+
+async function getFromGenerationCaches(
+  generations: Generation[],
+  limit: number,
+): Promise<StoredPokemon[] | null> {
+  const redis = await getRedisClient();
+  if (!redis) {
     return null;
   }
+
+  const keys = generations.map((generation) => buildGenerationCacheKey(generation));
+  const cachedRows = await redis.mGet(keys);
+
+  const entries: StoredPokemon[] = [];
+  for (const row of cachedRows) {
+    if (row === null) {
+      return null;
+    }
+    const parsed = deserializePokemon(row);
+    if (parsed === null) {
+      return null;
+    }
+    entries.push(...parsed);
+  }
+  return limitPokemon(entries, limit);
 }
 
-async function writeLocalPokemonDataset(pokemon: CachedPokemon[]): Promise<void> {
-  try {
-    await mkdir(path.dirname(LOCAL_DATA_PATH), { recursive: true });
-    await writeFile(LOCAL_DATA_PATH, JSON.stringify(pokemon), "utf8");
-  } catch {
-    // Non-fatal: memory cache still works if local disk cache write fails.
-  }
-}
-
-async function fetchPokemonPoolFromOrigin(limit: number): Promise<CachedPokemon[]> {
-  const listRes = await fetch(`${POKE_API}/pokemon?limit=${limit}`, {
-    next: { revalidate: 300 },
-  });
-  if (!listRes.ok) {
-    throw new Error("Failed to load pokemon list.");
+async function repopulateGenerationCaches(generations: Generation[]): Promise<void> {
+  const redis = await getRedisClient();
+  if (!redis) {
+    return;
   }
 
-  const listData = (await listRes.json()) as PokemonListResponse;
-  const fullPool = listData.results
-    .map((entry) => {
-      const id = parseIdFromUrl(entry.url);
-      if (!id) {
-        return null;
-      }
-      return {
-        id,
-        name: entry.name,
-        types: [] as string[],
-        imageUrl: `${SPRITE_BASE}/${id}.png`,
-      } satisfies CachedPokemon;
-    })
-    .filter((pokemon): pokemon is CachedPokemon => pokemon !== null);
-
-  return fullPool;
-}
-
-async function fetchPokemonPool(limit: number): Promise<CachedPokemon[]> {
-  const local = await readLocalPokemonDataset();
-  if (local) {
-    return local.filter((pokemon) => pokemon.id <= limit);
+  for (const generation of generations) {
+    const pokemon = await getPokemonByGeneration(generation);
+    await redis.setEx(
+      buildGenerationCacheKey(generation),
+      GENERATION_POKEMON_CACHE_TTL_SECONDS,
+      serializePokemon(pokemon),
+    );
   }
-  const pool = await fetchPokemonPoolFromOrigin(1025);
-  await writeLocalPokemonDataset(pool);
-  return pool.filter((pokemon) => pokemon.id <= limit);
 }
 
 export async function GET(request: NextRequest) {
@@ -130,23 +82,39 @@ export async function GET(request: NextRequest) {
 
     const limitParam = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "1025", 10);
     const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 1025) : 1025;
-    const cacheKey = `${generations.join(",")}|${limit}`;
-    const now = Date.now();
+    const filteredKey = buildFilteredCacheKey(generations, limit);
+    const redis = await getRedisClient();
 
-    const cached = responseCache.get(cacheKey);
-    if (cached && cached.expiresAt > now) {
-      return NextResponse.json({ pokemon: cached.pokemon, source: "cache" });
+    if (redis) {
+      const cachedFiltered = await redis.get(filteredKey);
+      const parsed = deserializePokemon(cachedFiltered);
+      if (parsed) {
+        return NextResponse.json({ pokemon: parsed, source: "redis" });
+      }
     }
 
-    const pool = await fetchPokemonPool(limit);
-    const generationPool = filterPokemonByGenerations(pool, generations);
-    responseCache.set(cacheKey, {
-      expiresAt: now + CACHE_TTL_MS,
-      pokemon: generationPool,
-    });
+    const fromGenerationCache = await getFromGenerationCaches(generations, limit);
+    if (fromGenerationCache) {
+      if (redis) {
+        await redis.setEx(
+          filteredKey,
+          FILTERED_POKEMON_CACHE_TTL_SECONDS,
+          serializePokemon(fromGenerationCache),
+        );
+      }
+      return NextResponse.json({ pokemon: fromGenerationCache, source: "redis" });
+    }
 
-    return NextResponse.json({ pokemon: generationPool, source: "origin" });
-  } catch {
+    const fromDb = await getPokemonByGenerations(generations, limit);
+    await repopulateGenerationCaches(generations);
+
+    if (redis) {
+      await redis.setEx(filteredKey, FILTERED_POKEMON_CACHE_TTL_SECONDS, serializePokemon(fromDb));
+    }
+
+    return NextResponse.json({ pokemon: fromDb, source: "db" });
+  } catch (error) {
+    console.error("Pokemon route failed:", error);
     return NextResponse.json({ error: "Unable to load pokemon data." }, { status: 500 });
   }
 }

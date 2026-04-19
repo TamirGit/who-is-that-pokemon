@@ -3,24 +3,34 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev --turbopack -H 0.0.0.0 -p 3000",
+    "dev:debug": "node --inspect=0.0.0.0:9229 --enable-source-maps ./node_modules/next/dist/bin/next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -H 0.0.0.0 -p 3000",
+    "start:debug": "node --inspect=0.0.0.0:9229 ./node_modules/next/dist/bin/next start -H 0.0.0.0 -p 3000",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "migrate": "tsx --env-file-if-exists=.env.local scripts/migrate.ts",
+    "seed:pokemon": "tsx --env-file-if-exists=.env.local scripts/seed-pokemon.ts",
+    "bootstrap": "tsx --env-file-if-exists=.env.local scripts/bootstrap.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "next": "^16.2.3",
+    "pg": "^8.20.0",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "redis": "^5.12.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@types/node": "^22.14.0",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19.0.12",
     "@types/react-dom": "^19.0.4",
     "eslint": "^9.24.0",
     "eslint-config-next": "^16.2.3",
+    "tsx": "^4.21.0",
     "typescript": "^5.8.2",
     "vitest": "^3.1.1"
   }
