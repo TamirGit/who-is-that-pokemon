@@ -23,6 +23,8 @@ import {
 import { fetchGenerationPokemonPool } from "@/lib/pokemonApi";
 import { GENERATIONS, type Generation } from "@/lib/generationRules";
 
+const MAX_AUTO_RETRIES = 3;
+
 function parseGenerations(value: string | null): Generation[] {
   if (!value) {
     return [];
@@ -64,6 +66,7 @@ function GamePageContent() {
   const [usedIds, setUsedIds] = useState<Set<number>>(new Set());
   const [hintLevel, setHintLevel] = useState<HintLevel>(0);
   const [wasSkipped, setWasSkipped] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   const startRound = useCallback(async () => {
     if (selectedGenerations.length === 0) {
@@ -90,19 +93,38 @@ function GamePageContent() {
       setScore({ roundsPlayed: 0, correctGuesses: 0 });
       setHintLevel(0);
       setWasSkipped(false);
+      setRetryCount(0);
     } catch {
       setError("Unable to load pokemon data right now.");
+      setRetryCount((current) => current + 1);
     } finally {
       setLoading(false);
     }
   }, [selectedGenerations]);
 
   useEffect(() => {
-    if (selectedGenerations.length === 0 || loading || round !== null || pool.length > 0 || error) {
+    if (selectedGenerations.length === 0 || loading || round !== null || pool.length > 0) {
       return;
     }
+    if (!error) {
+      void startRound();
+      return;
+    }
+    if (retryCount > MAX_AUTO_RETRIES) {
+      return;
+    }
+    const delayMs = 500 * 2 ** (retryCount - 1);
+    const timer = setTimeout(() => {
+      void startRound();
+    }, delayMs);
+    return () => clearTimeout(timer);
+  }, [selectedGenerations, loading, round, pool.length, error, retryCount, startRound]);
+
+  const onRetry = () => {
+    setError(null);
+    setRetryCount(0);
     void startRound();
-  }, [selectedGenerations, loading, round, pool.length, error, startRound]);
+  };
 
   const onGuess = (guess: string) => {
     if (!round || round.revealed) {
@@ -152,6 +174,7 @@ function GamePageContent() {
     setError(null);
     setHintLevel(0);
     setWasSkipped(false);
+    setRetryCount(0);
   };
 
   if (selectedGenerations.length === 0) {
@@ -171,7 +194,14 @@ function GamePageContent() {
 
       {!round && loading ? <p>Loading round...</p> : null}
 
-      {error ? <p>{error}</p> : null}
+      {error ? (
+        <div>
+          <p>{error}</p>
+          <button onClick={onRetry} disabled={loading}>
+            {loading ? "Retrying..." : "Retry"}
+          </button>
+        </div>
+      ) : null}
 
       {round && (
         <>
