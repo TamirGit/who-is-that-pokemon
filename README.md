@@ -140,6 +140,11 @@ Integration tests in the same stack:
 
 - `docker compose --profile test run --rm integration-tests`
 
+Notes:
+
+- Integration tests use isolated `postgres-test` and `redis-test` services.
+- They no longer mutate runtime app data in `postgres` / `redis`.
+
 ### Docker process debug
 
 Use dedicated debug service (includes Node inspector on `9229`):
